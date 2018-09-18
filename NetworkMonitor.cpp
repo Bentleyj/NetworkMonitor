@@ -209,9 +209,10 @@ int main() {
             // cout<<b2<<endl;
             onStartupMessageRecieved(b2);
             memset(b2, 0, sizeof(b2));
-            cout<<machines.size()<<endl;
+            cout<<"Total Machines: "<<machines.size()<<endl;
+            cout<<"-----------------------------"<<endl;
             for(int i = 0; i < machines.size(); i++) {
-                cout<<" Machine: "<<machines[i]->getMachineID()<<" version: "<<machines[i]->getVersion()<<" fps: "<<machines[i]->getFps()<<endl;
+                cout<<i<<" Name: "<<machines[i]->getMachineID()<<" version: "<<machines[i]->getVersion()<<" fps: "<<machines[i]->getFps()<<endl;
             }
             cout<<endl;
         }
