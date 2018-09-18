@@ -1,0 +1,49 @@
+In a typical d3 set up a user will have one master machine and several slave machines. These machines are bound together in a session. The master controls the session and knows which machines should be allowed to join. Masters and slaves both broadcast a message when they start up and then send a regular heartbeat message. These two message types use a similar protocol but are sent on different ports.
+
+We would like you to write a small program in C++ to monitor these messages and display the current status of the machines in some way. We use Visual Studio here so would prefer the solution to be delivered as a Visual Studio project - the trial version can be found on Microsoft's site. We don't expect anything more complicated than a simple command line application. You can use any permissive Open Source libraries.
+
+We are particularly interested in:
+- Code style
+- How you check for and handle errors
+- Thoughts on the message protocols
+
+Feel free to ask any questions before or during your work
+
+	
+---
+Protocol 1
+Each message is contained within a single data packet and these are broadcast over UDP port 7106. The message is sent as a plaintext string.
+
+Master sends this on startup:
+SESSION2|sessionname|creator|machineid1|machineid2|machineid3|machinen
+Example:
+SESSION2|my session|paulspc|peterspc|davespc
+
+Slaves sends this on startup:
+MACHINE|machineid|sessionname
+Example:
+MACHINE|peterspc|my session
+
+There are other message types sent over the protocol that you should ignore.
+
+
+---
+Protocol 2
+Each message is contained within a single data packet and these are broadcast over UDP port 7104.  The message is sent as a plaintext string.
+
+Every machine sends this at least once a second
+MACHINESTATUS|version|fps
+Example:
+MACHINESTATUS|11.2|60
+
+There are other message types sent over the protocol that you should ignore.
+
+
+---
+Notes:
+- For the purposes of this test a small Python 2.7 script will simulate a number of machines. The script will send UDP data to localhost rather than broadcasting it
+- Machines can start up and shut down in any order
+- There may be multiple sessions (ie: multiple master and slave networks) active on a network at any one time
+
+
+
