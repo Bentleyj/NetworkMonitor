@@ -1,8 +1,4 @@
-#include <iostream>
-#include <vector>
-#include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
+#include "ConnectionController.cpp"
 
 using namespace std;
 
@@ -35,10 +31,20 @@ class Session {
     public:
     private:
     Master master;
-    vector<Slave> slaves;
 };
 
 int main() {
-    cout << "Hello World In Network Monitor" << endl;
+
+    char buffer[1024];
+    ConnectionController c;
+    c.setIPAndPort("127.0.0.1", 7106);
+    c.connectToServer();
+    c.getSockStatus();
+    // while(1) {
+    //     int status = c.recieveMessage(buffer);
+    //     if(status > 0) {
+    //         cout<<"Recieved: "<<buffer<<endl;
+    //     }
+    // }
     return 0;
 }
