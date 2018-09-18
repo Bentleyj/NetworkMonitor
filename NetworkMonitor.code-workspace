@@ -23,7 +23,9 @@
 			"bitset": "cpp",
 			"initializer_list": "cpp",
 			"map": "cpp",
-			"utility": "cpp"
+			"utility": "cpp",
+			"__config": "cpp",
+			"__nullptr": "cpp"
 		}
 	}
 }
