@@ -3,5 +3,18 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"files.associations": {
+			"iostream": "cpp",
+			"ostream": "cpp",
+			"__locale": "cpp",
+			"ios": "cpp",
+			"iterator": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"vector": "cpp",
+			"algorithm": "cpp"
+		}
+	}
 }
