@@ -29,7 +29,9 @@
 			"__bit_reference": "cpp",
 			"stdexcept": "cpp",
 			"functional": "cpp",
-			"__string": "cpp"
+			"__string": "cpp",
+			"memory": "cpp",
+			"atomic": "cpp"
 		}
 	}
 }
