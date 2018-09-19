@@ -25,7 +25,8 @@
 			"map": "cpp",
 			"utility": "cpp",
 			"__config": "cpp",
-			"__nullptr": "cpp"
+			"__nullptr": "cpp",
+			"__bit_reference": "cpp"
 		}
 	}
 }

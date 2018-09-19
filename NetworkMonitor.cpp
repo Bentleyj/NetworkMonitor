@@ -7,7 +7,8 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
-#include <map>
+#include <time.h>
+
 
 using namespace std;
 
@@ -81,7 +82,7 @@ class Machine {
     public:
     Machine() {};
     ~Machine() {};
-    int parseStartup(vector<string>* msg) {
+    virtual int parseStartup(vector<string>* msg) {
         if(msg->size() != 3) {
             cout<<"Machine startup message includes "<<msg->size()<<" parameters, must include exactly 3 to start a machine.";
             return -1;
@@ -89,7 +90,8 @@ class Machine {
         machineID = (*msg)[1];
         version = "not yet reported.";
         fps = "not yet reported.";
-        sessionToJoin = (*msg)[2];
+        sessionToJoinName = (*msg)[2];
+        timeOfLastHeartbeat = clock();
         return 1; 
     }
 
@@ -102,62 +104,110 @@ class Machine {
             fps = (*msg)[3];
             version = (*msg)[2];
         }
+        timeOfLastHeartbeat = clock();
         return 1; 
+    }
+
+    bool isTimedOut() {
+        clock_t t = clock() - timeOfLastHeartbeat;
+        float heartbeatGapInSeconds = ((float)t)/CLOCKS_PER_SEC;
+        if(heartbeatGapInSeconds > 1.0) {
+            return true;
+        }
+        return false;
+    }
+
+    virtual void printDescription() {
+        cout<<"ID: "<<machineID<<" version: "<<version<<" fps: "<<fps<<endl;
     }
 
     string getVersion() { return version; };
     string getMachineID() { return machineID; };
     string getFps() { return fps; };
-    string getSessionToJoin() { return sessionToJoin; };
+    string getSessionToJoinName() { return sessionToJoinName; };
 
     protected:
+    clock_t timeOfLastHeartbeat;
     string machineID;
     string version;
     string fps;
-    string sessionToJoin;
+    string sessionToJoinName;
+    vector<Machine* > masters;
 };
 
 // This represents a session
-class Session {
+class Master : public Machine {
     public:
-    Session() {};
-    ~Session() {};
 
-    void parseStartup(vector<string>* msg) {
-        name = (*msg)[1];
-        creatorID = (*msg)[2];
+    virtual int parseStartup(vector<string>* msg) {
+        sessionName = (*msg)[1];
+        machineID = (*msg)[2];
         if(msg->size() == 3) {
             // This is a private session that no slaves are allowed to join.
         } else {
             // Add the permitted machine IDs
             for(int i = 3; i < msg->size(); i++) {
-                cout<<i<<": "<<(*msg)[i]<<endl;
                 permittedMachineIDs.push_back((*msg)[i]);
             }
         }
+        timeOfLastHeartbeat = clock();
+        return 1;
     };
 
-    void addSlave(Machine* machine) {
-        slaveMachineIDs.push_back(machine->getMachineID());
-        // slaveMachines.push_back(machine);
+    // Try to add any machines to this session if any want to join.
+    void tryToAddMachinesAsSlaves(vector<Machine*> machines) {
+        for(vector<Machine*>::iterator machine = machines.begin(); machine != machines.end(); machine++) {
+            if((*machine)->getSessionToJoinName() == sessionName) {
+                for(vector<string>::iterator permittedMachineID = permittedMachineIDs.begin(); permittedMachineID != permittedMachineIDs.end(); permittedMachineID++) {
+                    if((*machine)->getMachineID() == *permittedMachineID) {
+                        addSlave(*machine);
+                    }
+                }
+            }
+        }
     }
 
-    string getName() { return name; };
-    string getCreatorID() { return creatorID; };
+    virtual void printDescription() {
+        cout<<"Master ID: "<<machineID<<" version: "<<version<<" fps: "<<fps<<endl;
+        cout<<"Session Name "<<sessionName<<endl;
+        cout<<"Permitted Machines: "<<endl;
+        for(int i = 0; i < permittedMachineIDs.size(); i++) {
+            bool present = false;
+            for(int j = 0; j < slaveMachines.size(); j++) {
+                if(slaveMachines[j] != nullptr) {
+                    if(slaveMachines[j]->getMachineID() == permittedMachineIDs[i]) {
+                        present = true;
+                    }
+                }
+            }
+            cout<<permittedMachineIDs[i]<<" Present: "<<present<<endl;
+        }
+    }
+
+    void addSlave(Machine* machine) {
+        slaveMachines.push_back(machine);
+    }
+
+    void removeSlave(Machine* machine) {
+        vector<Machine*>::iterator it = find(slaveMachines.begin(), slaveMachines.end(), machine);
+        if(it != slaveMachines.end()) {
+            slaveMachines.erase(it);
+        }
+    }
+
+    string getSessionName() { return sessionName; };
     vector<string> getPermittedMachineIDs() { return permittedMachineIDs; };
-    vector<string> getSlaveMachineIDs() { return slaveMachineIDs; };
+    vector<Machine *> getSlaveMachines() { return slaveMachines; };
 
     private:
-    string name;
-    string creatorID;
+    string sessionName;
     vector<string> permittedMachineIDs;
-    vector<string> slaveMachineIDs;
-    // vector<Machine* > slaveMachine;
+    vector<Machine* > slaveMachines;
 
 };
 
 vector< Machine* > machines;
-vector< Session* > sessions;
+vector< Master* > masters;
 
 int onStartupMessageRecieved(char * buffer) {
     // First we'll split our string on ur expected delimiter:
@@ -165,19 +215,18 @@ int onStartupMessageRecieved(char * buffer) {
     if(message.size() > 0) {
         string messageType = message[0];
         if(messageType == "SESSION2") {
-            // it's a session startup moment.
-            Session* session = new Session();
-            session->parseStartup(&message);
-            for(int i = 0; i < sessions.size(); i++) {
-                if(sessions[i]->getName() == session->getName()) {
-                    if(sessions[i]->getCreatorID() == session->getCreatorID()) {
-                        // This session has already started up! so let's get rid of the one we just made.
-                        delete session;
-                        return 1;
-                    }
+            Master* master = new Master();
+            master->parseStartup(&message);
+            for(int i = 0; i < machines.size(); i++) {
+                if(machines[i]->getMachineID() == master->getMachineID()) {
+                    // This master has already started up! so let's get rid of the one we just made.
+                    delete master;
+                    return 1;
                 }
             }
-            sessions.push_back(session);
+            master->tryToAddMachinesAsSlaves(machines);
+            machines.push_back(master);
+            masters.push_back(master);
         } else if(messageType == "MACHINE") {
             // it's a machine startup moment.
             Machine* machine = new Machine();
@@ -190,15 +239,8 @@ int onStartupMessageRecieved(char * buffer) {
                 }
             }
             machines.push_back(machine);
-            // Now check if this machine wants to join an existing session, and if it does join them!
-            for(int i = 0; i < sessions.size(); i++) {
-                if(sessions[i]->getName() == machine->getSessionToJoin()) {
-                    for(int j = 0; j < sessions[i]->getPermittedMachineIDs().size(); j++) {
-                        if(sessions[i]->getPermittedMachineIDs()[j] == machine->getMachineID()) {
-                            sessions[i]->addSlave(machine);
-                        }
-                    }
-                }
+            for(int i = 0; i < masters.size(); i++) {
+                masters[i]->tryToAddMachinesAsSlaves(machines); // This could be optimised.
             }
         } else {
             // It's an unknown message that we can ignore.
@@ -233,29 +275,31 @@ int onHeartbeatMessageRecieved(char * buffer) {
     return 1;
 }
 
+void checkForTimeouts(vector<Machine *>* machines, vector<Master *>* masters) {
+    for(vector<Machine*>::iterator machineIt = machines->begin(); machineIt != machines->end(); ) {
+        if((*machineIt)->isTimedOut()) {
+            cout<<"Machine: "<< (*machineIt)->getMachineID()<<" Timed Out"<<endl;
+            for(vector<Master *>::iterator masterIt = masters->begin(); masterIt != masters->end(); masterIt++) {
+                vector<Machine*> slaves = (*masterIt)->getSlaveMachines();
+                for(int i = 0; i < slaves.size(); i++) {
+                    if(slaves[i] == (*machineIt)) {
+                        (*masterIt)->removeSlave(slaves[i]);
+                    }
+                }
+            }
+            delete (*machineIt);
+            machineIt = machines->erase(machineIt);
+        } else {
+            machineIt++;
+        }
+    }
+}
+
 void printStatus() {
-    cout<<"-----------------------------"<<endl;
     cout<<"Machines"<<endl;
     cout<<"-----------------------------"<<endl;
     for(int i = 0; i < machines.size(); i++) {
-        cout<<i<<" Name: "<<machines[i]->getMachineID()<<" version: "<<machines[i]->getVersion()<<" fps: "<<machines[i]->getFps()<<endl;
-    }
-    cout<<"Sessions"<<endl;
-    cout<<"-----------------------------"<<endl;
-    for(int i = 0; i < sessions.size(); i++) {
-        cout<<i<<" Name: "<<sessions[i]->getName()<<" creator: "<<sessions[i]->getCreatorID()<<" permitted Machines: " << endl;
-        vector<string> permittedMachineIDs = sessions[i]->getPermittedMachineIDs();
-        vector<string> slaveMachineIDs = sessions[i]->getSlaveMachineIDs();
-        for(int j = 0; j < permittedMachineIDs.size(); j++) {
-            bool present = false;
-            for(int k = 0; k < slaveMachineIDs.size(); k++) {
-                if(slaveMachineIDs[k] == permittedMachineIDs[j]) {
-                    present = true;
-                    break;
-                }
-            }
-            cout<<j<<" "<<permittedMachineIDs[j]<< " Present: "<< present <<endl;
-        }
+        machines[i]->printDescription();
     }
     cout<<"-----------------------------"<<endl;
     cout<<endl;
@@ -271,6 +315,8 @@ int main() {
     m6.connectToLocalServerAtPort(7106);
 
     while(1) {
+        checkForTimeouts(&machines, &masters);
+
         if(m4.getMessageRecieved(b1) > 0) {
             // cout<<b1<<endl;            
             onHeartbeatMessageRecieved(b1);
