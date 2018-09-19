@@ -26,7 +26,10 @@
 			"utility": "cpp",
 			"__config": "cpp",
 			"__nullptr": "cpp",
-			"__bit_reference": "cpp"
+			"__bit_reference": "cpp",
+			"stdexcept": "cpp",
+			"functional": "cpp",
+			"__string": "cpp"
 		}
 	}
 }
