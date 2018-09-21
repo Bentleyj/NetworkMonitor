@@ -129,6 +129,8 @@ class SocketMonitor
 	char buf[1024];         // dummy buffer with a sized size.
 };
 
+class Master;
+
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // This class represents both masters and slaves. Slaves have no extra functionality bseides this but masters will.
 // It has 4 main functions:
@@ -143,6 +145,7 @@ class Machine
     { 
         minimumStartupMessageSize = 3; 
         minimumHeartbeatMessageSize = 4;
+        master = nullptr;
     };
     ~Machine() {};
 
@@ -223,12 +226,18 @@ class Machine
     {
         cout<<"ID: "<<machineID<<" version: "<<version<<" fps: "<<fps<<" Session To Join: "<<sessionToJoinName<<endl;
     }
+    
+    // Set the master to a pointer (or null)
+    void setMaster(Master* master) {
+        master = master;
+    }
 
     // Getters
     string getVersion() { return version; };
     string getMachineID() { return machineID; };
     string getFps() { return fps; };
     string getSessionToJoinName() { return sessionToJoinName; };
+    Master* getMaster() { return master; };
 
     protected:
     clock_t timeOfLastHeartbeat;    // Time of last heartbeat, also set to the time of machine startup initially.
@@ -238,6 +247,7 @@ class Machine
     string sessionToJoinName;       // name of the session that you wish to join.
     int minimumStartupMessageSize;
     int minimumHeartbeatMessageSize;
+    Master* master;
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -252,6 +262,14 @@ class Master : public Machine
     {
         Machine();
         minimumStartupMessageSize = 3;
+    };
+    
+    // Destructor for master. All slaves are notified that their master is dead.
+    ~Master()
+    {
+        for(int i = 0; i < slaveMachines.size(); i++) {
+            slaveMachines[i]->setMaster(nullptr);
+        }
     };
 
     // This parses a startup string that starts with the message type SESSION2.
@@ -319,7 +337,7 @@ class Master : public Machine
     }
 
     // Try to add any machines to this session if any want to join.
-    void tryToAddMachinesAsSlaves(vector<Machine*> machines) 
+    void tryToAddMachinesAsSlaves(vector<Machine*> machines)
     {
         for(vector<Machine*>::iterator machine = machines.begin(); machine != machines.end(); machine++) 
         {
@@ -328,7 +346,7 @@ class Master : public Machine
     }
 
     // Try to add a single machine to this session if any want to join.
-    void tryToAddMachineAsSlave(Machine* machine) 
+    bool tryToAddMachineAsSlave(Machine* machine)
     {
         if(machine->getSessionToJoinName() == sessionName) 
         {
@@ -337,9 +355,11 @@ class Master : public Machine
                 if(machine->getMachineID() == *permittedMachineID) 
                 {
                     addSlave(machine);
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     // Descirbe yourself, your statistics, and your session
@@ -372,10 +392,10 @@ class Master : public Machine
     }
 
     // remove a slave machine from your officially connected slaves.
-    void removeSlave(Machine* machine) 
+    void removeSlave(Machine* machine)
     {
         vector<Machine*>::iterator it = find(slaveMachines.begin(), slaveMachines.end(), machine);
-        if(it != slaveMachines.end()) 
+        if(it != slaveMachines.end())
         {
             slaveMachines.erase(it);
         }
@@ -483,7 +503,6 @@ class Master : public Machine
                                 {
                                     masters[j]->updateFromAnotherMachine(master);
                                     masters[j]->tryToAddMachinesAsSlaves(machines);
-
                                 }
                             }
                             delete master;
@@ -515,7 +534,9 @@ class Master : public Machine
                             machines[i]->updateFromAnotherMachine(machine);
                             for(int j = 0; j < masters.size(); j++) 
                             {
-                                masters[j]->tryToAddMachineAsSlave(machines[i]);
+                                if(masters[j]->tryToAddMachineAsSlave(machines[i])) {
+                                    machine->setMaster(masters[j]);
+                                }
                             }
                             delete machine;
                             return 1;
@@ -525,7 +546,9 @@ class Master : public Machine
                     machines.push_back(machine);
                     for(int i = 0; i < masters.size(); i++) 
                     {
-                        masters[i]->tryToAddMachineAsSlave(machine); // This could be optimised.
+                        if(masters[i]->tryToAddMachineAsSlave(machine)) {
+                            machine->setMaster(masters[i]);
+                        }
                     }
                 }
                 else 
@@ -590,17 +613,12 @@ class Master : public Machine
             {
                 // Check if any machines have timed out
                 cout<<"Machine: "<< (*machineIt)->getMachineID()<<" Timed Out"<<endl; // Tell me.
-                for(vector<Master *>::iterator masterIt = masters->begin(); masterIt != masters->end(); masterIt++) 
+                
+                if((*machineIt)->getMaster() != nullptr)
                 {
-                    vector<Machine*> slaves = (*masterIt)->getSlaveMachines();
-                    for(int i = 0; i < slaves.size(); i++) 
-                    {
-                        if(slaves[i] == (*machineIt)) 
-                        {
-                            (*masterIt)->removeSlave(slaves[i]);
-                        }
-                    }
+                    (*machineIt)->getMaster()->removeSlave((*machineIt));
                 }
+                
                 vector<Master*>::iterator it = find(masters->begin(), masters->end(), (*machineIt));
                 if(it != masters->end()) 
                 {
